@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>기후변화과학 퀴즈대회 예상 문제</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f0f4f8; text-align: center; padding: 40px 20px; color: #333; }
+        .quiz-container { background: white; max-width: 600px; margin: auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h2 { color: #1a73e8; margin-bottom: 30px; }
+        .question { font-size: 1.2em; margin-bottom: 20px; font-weight: bold; word-break: keep-all; line-height: 1.5; }
+        .options button { display: block; width: 100%; padding: 14px; margin: 8px 0; border: 1px solid #dcdcdc; border-radius: 8px; background: #fff; font-size: 1em; cursor: pointer; transition: 0.2s; }
+        .options button:hover:not(:disabled) { background: #f1f3f4; }
+        .options button:disabled { cursor: not-allowed; }
+        .short-answer-container { display: flex; gap: 10px; margin-top: 15px; }
+        .short-answer-container input { flex: 1; padding: 14px; border: 1px solid #dcdcdc; border-radius: 8px; font-size: 1em; }
+        .short-answer-container button { padding: 14px 20px; background: #34a853; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold; white-space: nowrap; }
+        .short-answer-container button:hover:not(:disabled) { background: #2d9047; }
+        #result { margin-top: 20px; font-weight: bold; font-size: 1.2em; }
+        .explanation { display: none; margin-top: 20px; padding: 15px; background-color: #e8f0fe; border-left: 5px solid #1a73e8; border-radius: 4px; font-size: 0.95em; text-align: left; line-height: 1.6; }
+        #next-btn { display: none; margin: 25px auto 0; padding: 12px 24px; background: #1a73e8; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1em; font-weight: bold; }
+        #next-btn:hover { background: #1557b0; }
+        #loading { font-size: 1.2em; color: #666; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="quiz-container">
+    <h2>🌍 기후변화과학 퀴즈대회 예상 문제</h2>
+    <div id="loading">🚀 퀴즈 문제를 불러오는 중입니다...</div>
+    <div id="quiz" style="display: none;">
+        <div class="question" id="question-text">문제가 여기에 나옵니다.</div>
+        <div class="options" id="options"></div>
+    </div>
+    <div id="result"></div>
+    <div class="explanation" id="explanation"></div>
+    <button id="next-btn">다음 문제 ➔</button>
+</div>
+
+<script>
+    let quizData = [];
+    let currentQuestion = 0;
+    const loadingEl = document.getElementById("loading");
+    const quizEl = document.getElementById("quiz");
+    const questionEl = document.getElementById("question-text");
+    const optionsEl = document.getElementById("options");
+    const resultEl = document.getElementById("result");
+    const explanationEl = document.getElementById("explanation");
+    const nextBtn = document.getElementById("next-btn");
+
+    // 방금 올린 quiz.csv 파일을 읽어오는 부분
+    Papa.parse("quiz.csv", {
+        download: true,
+        header: true, 
+        skipEmptyLines: true, 
+        complete: function(results) {
+            quizData = results.data.map(row => {
+                let options = [];
+                if (row.종류 === 'ox') {
+                    options = [row.보기1, row.보기2].filter(Boolean);
+                } else if (row.종류 === 'mcq') {
+                    options = [row.보기1, row.보기2, row.보기3, row.보기4].filter(Boolean); 
+                }
+                return {
+                    type: row.종류,
+                    question: row.문제,
+                    options: options,
+                    answer: String(row.정답).trim(),
+                    explanation: row.해설
+                };
+            });
+            
+            loadingEl.style.display = "none";
+            quizEl.style.display = "block";
+            loadQuestion();
+        },
+        error: function() {
+            loadingEl.innerText = "❌ quiz.csv 파일을 찾을 수 없습니다. 파일이 잘 올라갔는지 확인해주세요!";
+            loadingEl.style.color = "red";
+        }
+    });
+
+    function loadQuestion() {
+        resultEl.innerText = "";
+        explanationEl.style.display = "none";
+        explanationEl.innerText = "";
+        nextBtn.style.display = "none";
+        optionsEl.innerHTML = "";
+        
+        const currentQuiz = quizData[currentQuestion];
+        // 몇 번 문제인지 표시
+        questionEl.innerText = `[${currentQuestion + 1} / ${quizData.length}] ` + currentQuiz.question;
+
+        if (currentQuiz.type === "ox" || currentQuiz.type === "mcq") {
+            currentQuiz.options.forEach(option => {
+                const button = document.createElement("button");
+                button.innerText = option;
+                button.onclick = () => checkAnswer(option, button);
+                optionsEl.appendChild(button);
+            });
+        } else if (currentQuiz.type === "short") {
+            const container = document.createElement("div");
+            container.className = "short-answer-container";
+            const input = document.createElement("input");
+            input.type = "text";
+            input.placeholder = "정답을 입력하세요";
+            input.id = "short-input";
+            const submitBtn = document.createElement("button");
+            submitBtn.innerText = "제출";
+            submitBtn.onclick = () => checkAnswer(input.value.trim(), submitBtn);
+
+            input.addEventListener("keypress", function(event) {
+                if (event.key === "Enter") { event.preventDefault(); submitBtn.click(); }
+            });
+            
+            container.appendChild(input);
+            container.appendChild(submitBtn);
+            optionsEl.appendChild(container);
+        }
+    }
+
+    function checkAnswer(userAnswer, element) {
+        const currentQuiz = quizData[currentQuestion];
+        const correctAnswer = currentQuiz.answer;
+        
+        if (currentQuiz.type === "short") {
+            document.getElementById("short-input").disabled = true;
+            element.disabled = true;
+        } else {
+            const allButtons = optionsEl.querySelectorAll("button");
+            allButtons.forEach(btn => btn.disabled = true);
+        }
+
+        if (userAnswer === correctAnswer) {
+            resultEl.innerText = "🎉 정답입니다!";
+            resultEl.style.color = "#34a853";
+            if (currentQuiz.type !== "short") { element.style.background = "#e6f4ea"; element.style.borderColor = "#34a853"; }
+        } else {
+            resultEl.innerText = "❌ 오답입니다. (정답: " + correctAnswer + ")";
+            resultEl.style.color = "#ea4335";
+            if (currentQuiz.type !== "short") { element.style.background = "#fce8e6"; element.style.borderColor = "#ea4335"; }
+        }
+
+        explanationEl.innerHTML = "<strong>💡 해설:</strong><br>" + currentQuiz.explanation;
+        explanationEl.style.display = "block";
+        nextBtn.style.display = "block";
+    }
+
+    nextBtn.onclick = () => {
+        currentQuestion++;
+        if (currentQuestion < quizData.length) {
+            loadQuestion();
+        } else {
+            questionEl.innerText = "🏆 모든 문제를 다 풀었습니다! 수고했어요.";
+            optionsEl.innerHTML = "";
+            resultEl.innerText = "";
+            explanationEl.style.display = "none";
+            nextBtn.style.display = "none";
+        }
+    };
+</script>
+
+</body>
+</html>
